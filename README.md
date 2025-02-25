@@ -89,3 +89,291 @@ Django empowers you to extend or override the default authentication backend to 
 
 - [Django Custom User Model Documentation](https://intranet.alxswe.com/rltoken/ett-FApY6-NN0yXwZ0qnWw)
 - [Django Authentication Backends](https://intranet.alxswe.com/rltoken/jrlgYEoefTeld6cDZKqbIQ)
+
+# Extras
+
+Let’s break down the concept of **custom authentication backends**.
+
+---
+
+### What Is a Custom Authentication Backend?
+
+In Django, an **authentication backend** is a system that handles how users are authenticated (logged in). By default, Django uses the `ModelBackend`, which authenticates users based on the username and password stored in the database.
+
+However, sometimes you might want to customize this process. For example:
+
+- Allow users to log in with their **email** instead of a username.
+- Integrate **social login** (e.g., Google, Facebook).
+- Add **two-factor authentication**.
+- Authenticate users against an external system (e.g., LDAP).
+
+To do this, you can create a **custom authentication backend**.
+
+---
+
+### How Does It Work?
+
+A custom authentication backend is a Python class that defines two key methods:
+
+1. **`authenticate()`**: This method checks if the user's credentials (e.g., email and password) are valid and returns the user object if they are.
+2. **`get_user()`**: This method retrieves a user object based on a unique identifier (e.g., user ID).
+
+Once you create this backend, you tell Django to use it by adding it to the `AUTHENTICATION_BACKENDS` setting in `settings.py`.
+
+---
+
+### Steps to Create a Custom Authentication Backend
+
+1. **Define the Custom Backend Class**:
+
+   - Create a class that inherits from `BaseBackend`.
+   - Implement the `authenticate()` and `get_user()` methods.
+
+2. **Register the Backend**:
+   - Add the path to your custom backend in the `AUTHENTICATION_BACKENDS` setting in `settings.py`.
+
+---
+
+### Example: Phone Number Authentication
+
+Let’s create a custom authentication backend where users log in with their **phone number** instead of a username or email.
+
+#### Step 1: Define the Custom Backend Class
+
+Create a file called `backends.py` in your app (e.g., `accounts/backends.py`):
+
+```python
+from django.contrib.auth.backends import BaseBackend
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class PhoneBackend(BaseBackend):
+    def authenticate(self, request, phone_number=None, password=None):
+        # Check if a user with the given phone number exists
+        try:
+            user = User.objects.get(phone_number=phone_number)
+            # Verify the password
+            if user.check_password(password):
+                return user  # Authentication successful
+        except User.DoesNotExist:
+            return None  # No user found with this phone number
+        return None  # Password is incorrect
+
+    def get_user(self, user_id):
+        try:
+            return User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return None
+```
+
+#### Step 2: Update the User Model
+
+Ensure your custom user model has a `phone_number` field:
+
+```python
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+
+class CustomUser(AbstractBaseUser):
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=15, unique=True)
+    first_name = models.CharField(max_length=30)
+    last_name = models.CharField(max_length=30)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    USERNAME_FIELD = 'email'  # Default login field
+    REQUIRED_FIELDS = ['phone_number', 'first_name', 'last_name']
+
+    def __str__(self):
+        return self.email
+```
+
+#### Step 3: Register the Custom Backend
+
+In `settings.py`, add your custom backend to the `AUTHENTICATION_BACKENDS` list:
+
+```python
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.PhoneBackend',  # Your custom backend
+    'django.contrib.auth.backends.ModelBackend',  # Default backend (fallback)
+]
+```
+
+#### Step 4: Update the Login View
+
+In your login view, modify the form to accept a phone number instead of a username:
+
+```python
+from django.contrib.auth import authenticate, login
+from django.shortcuts import render, redirect
+
+def login_view(request):
+    if request.method == 'POST':
+        phone_number = request.POST['phone_number']
+        password = request.POST['password']
+        user = authenticate(request, phone_number=phone_number, password=password)
+        if user is not None:
+            login(request, user)
+            return redirect('home')
+        else:
+            return render(request, 'login.html', {'error': 'Invalid phone number or password'})
+    return render(request, 'login.html')
+```
+
+#### Step 5: Update the Login Form
+
+In your `login.html` template, update the form fields:
+
+```html
+<form method="post">
+  {% csrf_token %}
+  <label for="phone_number">Phone Number:</label>
+  <input type="text" name="phone_number" required />
+  <br />
+  <label for="password">Password:</label>
+  <input type="password" name="password" required />
+  <br />
+  <button type="submit">Login</button>
+</form>
+```
+
+---
+
+### How It Works
+
+1. When a user submits the login form, the `phone_number` and `password` are sent to the `login_view`.
+2. The `authenticate()` method in the `PhoneBackend` is called.
+   - It looks for a user with the given `phone_number`.
+   - If the user exists and the password is correct, it returns the user object.
+3. If authentication is successful, the user is logged in using Django's `login()` function.
+
+---
+
+### Why Is This Useful?
+
+- **Flexibility**: You can authenticate users in any way you want (e.g., phone number, social login, etc.).
+- **Fallback**: You can keep the default `ModelBackend` as a fallback for other authentication methods.
+- **Custom Logic**: You can add additional checks (e.g., two-factor authentication) in the `authenticate()` method.
+
+---
+
+### Key Takeaways
+
+- A **custom authentication backend** allows you to define your own rules for logging in users.
+- You need to implement two methods: `authenticate()` and `get_user()`.
+- Register your backend in `AUTHENTICATION_BACKENDS` to make it active.
+
+````markdown
+# Permissions and Authorization
+
+This concept page aims to discuss the implementation and management of permissions and authorization mechanisms within Django to enforce fine-grained access control and enhance the security of your web applications.
+
+## Concept Overview
+
+Permissions and authorization are fundamental aspects of web application security. They allow you to control which users can access specific resources or perform certain actions within your Django application. This concept explores Django’s built-in permission system and how to effectively manage access control.
+
+## Topics
+
+- Understanding Permissions and Groups
+- Assigning Permissions
+- Permission Checks in Views and Templates
+- Custom Permissions
+
+## Learning Objectives
+
+- Grasp the core concepts of permissions and groups in Django.
+- Learn how to create and assign permissions to users and groups.
+- Implement permission checks within views and templates to restrict access.
+- Define and utilize custom permissions for granular access control.
+
+## Understanding Permissions and Groups
+
+### Permissions
+
+Permissions are fine-grained access controls that define specific actions a user can perform, such as “can add post,” “can change user,” or “can delete comment.” Django provides a set of built-in permissions for common actions related to models.
+
+### Groups
+
+Groups allow you to categorize users and assign permissions to the entire group at once. This simplifies permission management, especially when dealing with many users.
+
+## Assigning Permissions
+
+### 1. Django Admin
+
+The Django admin interface provides a user-friendly way to manage permissions. You can assign permissions to individual users or groups directly from the admin panel.
+
+### 2. Programmatically
+
+You can also assign permissions programmatically using the `user.user_permissions.add()` and `group.permissions.add()` methods. This is useful for automating permission assignments or integrating with custom user registration processes.
+
+```python
+from django.contrib.auth.models import Permission
+
+# Get the permission
+permission = Permission.objects.get(codename='add_post')
+
+# Assign permission to a user
+user.user_permissions.add(permission)
+
+# Assign permission to a group
+group.permissions.add(permission)
+```
+````
+
+## Permission Checks in Views and Templates
+
+### Views
+
+In your views, you can check if a user has a specific permission using the `user.has_perm()` method. This allows you to control which parts of the view logic are executed based on the user’s permissions.
+
+```python
+def my_view(request):
+    if request.user.has_perm('app_name.add_post'):
+        # Allow user to create a new post
+        ...
+    else:
+        # Deny access or show an error message
+        ...
+```
+
+### Templates
+
+Django’s template system provides the `{% if perms %}` tag to conditionally render content based on the user’s permissions.
+
+```django
+{% if perms.app_name.add_post %}
+    <a href="{% url 'create_post' %}">Create New Post</a>
+{% endif %}
+```
+
+## Custom Permissions
+
+While Django’s built-in permissions cover many common use cases, you may need more granular control for specific applications. You can create custom permissions by defining them in your models:
+
+```python
+class Post(models.Model):
+    # ... other fields ...
+
+    class Meta:
+        permissions = [
+            ("can_publish_post", "Can publish post"),
+        ]
+```
+
+This creates a new permission called “can_publish_post” which you can then assign to users or groups just like any other permission.
+
+## Practice Exercise
+
+1. Explore the Django admin interface and practice assigning permissions to users and groups.
+2. Implement permission checks in a view to restrict access to a specific section of your application based on user permissions.
+3. Define a custom permission for a model in your project and use it to control access to a particular action.
+
+## Additional Resources
+
+- [Django Permissions Documentation](https://intranet.alxswe.com/rltoken/VkBgLyvjvUVC2fByg9ECYw)
+- [Django Groups Documentation](https://intranet.alxswe.com/rltoken/8CUFiOq155V8qysRZxRiLQ)
+
+```
+
+```

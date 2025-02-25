@@ -1,0 +1,5 @@
+{%if perms.myapp.add_post%}
+
+<a href={%url 'create-post'%}>Create Post</a>
+
+{%endif%}
